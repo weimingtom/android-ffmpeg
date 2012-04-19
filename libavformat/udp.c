@@ -326,9 +326,10 @@ static void *circular_buffer_task( void *_URLContext)
 {
     URLContext *h = _URLContext;
     UDPContext *s = h->priv_data;
+#ifndef ANDROID
     int old_cancelstate;
-
     pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_cancelstate);
+#endif
     ff_socket_nonblock(s->udp_fd, 0);
     pthread_mutex_lock(&s->mutex);
     while(1) {
@@ -338,9 +339,13 @@ static void *circular_buffer_task( void *_URLContext)
         /* Blocking operations are always cancellation points;
            see "General Information" / "Thread Cancelation Overview"
            in Single Unix. */
+#ifndef ANDROID
         pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &old_cancelstate);
+#endif
         len = recv(s->udp_fd, s->tmp+4, sizeof(s->tmp)-4, 0);
+#ifndef ANDROID
         pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_cancelstate);
+#endif
         pthread_mutex_lock(&s->mutex);
         if (len < 0) {
             if (ff_neterrno() != AVERROR(EAGAIN) && ff_neterrno() != AVERROR(EINTR)) {
@@ -654,7 +659,9 @@ static int udp_close(URLContext *h)
     av_fifo_free(s->fifo);
 #if HAVE_PTHREADS
     if (s->thread_started) {
+#ifndef ANDROID
         pthread_cancel(s->circular_buffer_thread);
+#endif
         ret = pthread_join(s->circular_buffer_thread, NULL);
         if (ret != 0)
             av_log(h, AV_LOG_ERROR, "pthread_join(): %s\n", strerror(ret));
